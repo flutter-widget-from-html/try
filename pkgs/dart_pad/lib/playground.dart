@@ -375,8 +375,10 @@ class Playground extends EditorUi implements GistContainer, GistController {
   Future<void> _initChannelsMenu() async {
     channels = await Future.wait([
       Channel.fromVersion('stable'),
-      Channel.fromVersion('beta'),
-      Channel.fromVersion('master'),
+      // TODO: deploy beta.api.fwfh.dev
+      // Channel.fromVersion('beta'),
+      // TODO: deploy master.api.fwfh.dev
+      // Channel.fromVersion('master'),
     ]);
 
     final element = _buildChannelsMenu(channels);
