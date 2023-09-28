@@ -33,7 +33,7 @@ steps:
       - '--memory=4Gi'
       - '--concurrency=2'
       - '--cpu-boost'
-      - '--max-instances=1'
+      - '--max-instances=5'
     id: Deploy
     dir: pkgs/dart_services
 timeout: 1200s
