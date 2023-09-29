@@ -33,5 +33,5 @@ RUN dart pub run grinder setup-flutter-sdk
 RUN dart pub run grinder build-storage-artifacts validate-storage-artifacts
 
 ENTRYPOINT dart bin/server.dart \
-  --redis-url=redis://10.0.0.4:6379 \
+  --redis-url=$REDIS_URL \
   --channel=stable
