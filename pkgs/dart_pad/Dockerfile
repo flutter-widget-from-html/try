@@ -7,10 +7,11 @@ RUN groupadd --system dart && \
 
 # See https://github.com/cirruslabs/docker-images-flutter/blob/master/sdk/Dockerfile
 RUN chown -R dart:dart ${FLUTTER_HOME}
-
 RUN chown dart:dart /app
+
 USER dart
 COPY --chown=dart:dart pubspec.* /app/
+COPY --chown=dart:dart third_party/ /app/third_party/
 RUN dart pub get
 COPY --chown=dart:dart . /app
 RUN dart pub get --offline
