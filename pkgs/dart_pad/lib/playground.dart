@@ -120,7 +120,7 @@ class Playground extends EditorUi implements GistContainer, GistController {
     _initMoreMenu();
     _initSplitters();
 
-    // TODO: render channel menu after deploying beta, master backends
+    // TODO(try.fwfh.dev): init channels after deploying beta, master backends
     // _initChannelsMenu();
     
     showHome();
