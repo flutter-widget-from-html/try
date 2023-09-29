@@ -78,6 +78,7 @@ const Set<String> firebasePackages = {
 /// The set of supported Flutter-oriented packages.
 Set<String> supportedFlutterPackages() => {
       'animations',
+      'carousel_slider',
       'creator',
       'firebase_analytics',
       'firebase_database',
@@ -96,6 +97,8 @@ Set<String> supportedFlutterPackages() => {
       'flutter_processing',
       'flutter_riverpod',
       'flutter_svg',
+      'flutter_widget_from_html',
+      'flutter_widget_from_html_core',
       'go_router',
       'google_fonts',
       'hooks_riverpod',
