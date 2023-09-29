@@ -2,12 +2,12 @@ FROM dart:stable
 
 # We install unzip and remove the apt-index again to keep the
 # docker image diff small.
-RUN apt-get update && \
-  apt-get install -y unzip && \
+RUN apt-get update &&
+  apt-get install -y unzip &&
   rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN groupadd --system dart && \
+RUN groupadd --system dart &&
   useradd --no-log-init --system --home /home/dart --create-home -g dart dart
 RUN chown dart:dart /app
 
