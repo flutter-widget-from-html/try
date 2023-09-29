@@ -42,6 +42,7 @@ h1 {
 
 final String flutterCode = r'''
 import 'package:flutter/material.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 
 const Color darkBlue = Color.fromARGB(255, 18, 32, 47);
 
@@ -69,9 +70,8 @@ class MyApp extends StatelessWidget {
 class MyWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'Hello, World!',
-      style: Theme.of(context).textTheme.headlineMedium,
+    return const HtmlWidget(
+      'Hello, <strong style="color: red">World</strong>!',
     );
   }
 }
