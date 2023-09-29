@@ -23,4 +23,5 @@ FROM nginx:alpine
 
 COPY --from=builder /app/build /etc/nginx/html
 
-RUN sed -i'' 's/worker_processes  auto;/worker_processes 2;/' /etc/nginx/nginx.conf && cat /etc/nginx/nginx.conf && printf -- 'server { listen 80; location ~* \.(json|otf|ttf)$ { add_header Access-Control-Allow-Origin *; expires max; } location / { try_files $uri /index.html; } }' >/etc/nginx/conf.d/default.conf
+RUN sed -i'' 's/worker_processes  auto;/worker_processes 2;/' /etc/nginx/nginx.conf && \
+  printf -- 'server { listen 80; location ~* \.(json|otf|ttf)$ { add_header Access-Control-Allow-Origin *; expires max; } location / { try_files $uri /index.html; } }' >/etc/nginx/conf.d/default.conf
