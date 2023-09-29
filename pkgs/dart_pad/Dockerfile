@@ -4,6 +4,10 @@ FROM ghcr.io/cirruslabs/flutter:stable as builder
 WORKDIR /app
 RUN groupadd --system dart && \
   useradd --no-log-init --system --home /home/dart --create-home -g dart dart
+
+# See https://github.com/cirruslabs/docker-images-flutter/blob/master/sdk/Dockerfile
+RUN chown -R dart:dart ${FLUTTER_HOME}
+
 RUN chown dart:dart /app
 USER dart
 COPY --chown=dart:dart pubspec.* /app/
