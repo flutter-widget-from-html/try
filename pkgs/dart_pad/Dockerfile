@@ -21,5 +21,6 @@ RUN dart run tool/grind.dart build
 
 FROM nginx:alpine
 
-# See https://hub.docker.com/_/nginx
-COPY --from=builder /app/build /usr/share/nginx/html
+COPY --from=builder /app/build /etc/nginx/html
+
+RUN printf -- 'server { listen 80; location ~* \.(json|otf|ttf)$ { add_header Access-Control-Allow-Origin *; expires max; } location / { try_files $uri /index.html; } }' >/etc/nginx/conf.d/default.conf
