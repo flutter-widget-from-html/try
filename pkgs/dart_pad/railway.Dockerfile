@@ -17,7 +17,8 @@ COPY --chown=dart:dart . /app
 RUN dart pub get --offline
 
 # Patch SERVER_URL to use relative path, it will be proxied via Caddy
-RUN sed -i'' 's#https://stable.api.fwfh.dev/#/#' build.yaml &&  cat build.yaml
+# `touch -r` is used to preserve timestamps and allow Docker to cache the layer
+RUN cat build.yaml | sed 's#https://stable.api.fwfh.dev/#/#' >build2.yaml && touch -r build.yaml build2.yaml && mv build2.yaml build.yaml && cat build.yaml
 
 # See .cloud_build/dart_pad.yaml
 RUN dart run tool/grind.dart build
