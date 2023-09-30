@@ -5,6 +5,10 @@
 	log
 	try_files {path} /index.html
 
+	# add CORS header by extensions for simplicity
+	@cors path_regexp \.(json|otf|ttf)$
+	header @cors Access-Control-Allow-Origin *
+
 	handle_path /api* {
 		rewrite * /api{uri}
 
