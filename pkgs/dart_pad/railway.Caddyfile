@@ -4,6 +4,10 @@
 	file_server
 	log
 
+	# add CORS header by extensions for simplicity
+	@cors path_regexp \.(json|otf|ttf)$
+	header @cors Access-Control-Allow-Origin *
+
 	handle_path /api* {
 		rewrite * /api{uri}
 
