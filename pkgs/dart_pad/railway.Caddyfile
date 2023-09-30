@@ -1,0 +1,19 @@
+:{$PORT} {
+  root * /usr/share/caddy
+
+  file_server
+  log
+
+  handle_path /api* {
+    rewrite * /api{uri}
+
+    reverse_proxy {
+      dynamic a {
+        name api-stable.railway.internal
+        port {$API_STABLE_PORT}
+        refresh 1s
+        versions ipv6
+      }
+    }
+  }
+}

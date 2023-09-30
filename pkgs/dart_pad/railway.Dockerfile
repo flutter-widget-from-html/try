@@ -22,9 +22,7 @@ RUN sed -i'' 's#https://stable.api.fwfh.dev/#/#' build.yaml &&  cat build.yaml
 # See .cloud_build/dart_pad.yaml
 RUN dart run tool/grind.dart build
 
-FROM nginx:alpine
+FROM caddy:alpine
 
-COPY --from=builder /app/build /etc/nginx/html
-COPY railway.nginx.conf /etc/nginx/conf.d/default.conf
-
-RUN sed -i'' 's/worker_processes  auto;/worker_processes 2;/' /etc/nginx/nginx.conf && cat /etc/nginx/nginx.conf
+COPY --from=builder /app/build /usr/share/caddy
+COPY railway.Caddyfile /etc/caddy/Caddyfile
