@@ -17,10 +17,9 @@ COPY --chown=dart:dart . /app
 RUN dart pub get --offline
 
 # Patch SERVER_URL to use relative path, it will be proxied via Caddy
-RUN sed -i'' 's#https://stable.api.fwfh.dev/#/#' build.yaml &&  cat build.yaml
-
-# See .cloud_build/dart_pad.yaml
-RUN dart run tool/grind.dart build
+RUN sed -i'' 's#https://stable.api.fwfh.dev/#/#' build.yaml && \
+  cat build.yaml && \
+  dart run tool/grind.dart build
 
 FROM caddy:alpine
 
