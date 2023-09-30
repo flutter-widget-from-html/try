@@ -17,7 +17,7 @@ targets:
           - --fast-startup
           - --minify
           - --no-source-maps
-          - -DSERVER_URL=https://api-fwfh.up.railway.app/
+          - -DSERVER_URL=https://stable.api.fwfh.dev/
           - -DSTABLE_SERVER_URL=https://stable.api.fwfh.dev/
           - -DBETA_SERVER_URL=https://beta.api.fwfh.dev/
           - -DMASTER_SERVER_URL=https://master.api.fwfh.dev/
@@ -37,7 +37,7 @@ global_options:
   build_web_compilers:ddc:
     options:
       environment:
-        SERVER_URL: https://api-fwfh.up.railway.app/
+        SERVER_URL: https://stable.api.fwfh.dev/
         STABLE_SERVER_URL: https://stable.api.fwfh.dev/
         BETA_SERVER_URL: https://beta.api.fwfh.dev/
         MASTER_SERVER_URL: https://master.api.fwfh.dev/
