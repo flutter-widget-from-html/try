@@ -8,6 +8,7 @@
     ]
   },
   "deploy": {
-    "sleepApplication": true
+    "sleepApplication": true,
+    "startCommand": "/bin/sh -c \"sleep 1 && nginx -g 'daemon off;'\""
   }
 }
