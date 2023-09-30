@@ -1,25 +1,33 @@
 :{$PORT} {
+	log
 	root * /usr/share/caddy
 
-	file_server
-	log
+	route {
+		handle_path /api* {
+			rewrite * /api{uri}
 
-	handle_path /api* {
-		rewrite * /api{uri}
+			reverse_proxy {
+				dynamic a {
+					name api-stable.railway.internal
+					port {$API_STABLE_PORT}
 
-		reverse_proxy {
-			dynamic a {
-				name api-stable.railway.internal
-				port {$API_STABLE_PORT}
+					# each new deployment has a new IP address
+					# this service is development only
+					# let's re-resolve every second
+					refresh 1s
 
-				# each new deployment has a new IP address
-				# this service is development only
-				# let's re-resolve every second
-				refresh 1s
-
-				# Railway's private network is reachable via IPv6 only
-				versions ipv6
+					# Railway's private network is reachable via IPv6 only
+					versions ipv6
+				}
 			}
 		}
+
+		try_files {path} /index.html
+
+		# add CORS header by extensions for simplicity
+		@cors path_regexp \.(json|otf|ttf)$
+		header @cors Access-Control-Allow-Origin *
+
+		file_server
 	}
 }
