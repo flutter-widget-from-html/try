@@ -300,7 +300,7 @@ class GitHubUIController {
 
     final jsonParams = json.encode(params);
 
-    if (window.location.hostname != 'dartpad.dev') {
+    if (window.location.hostname != 'try.fwfh.dev') {
       // We have to START our login from `dartpad.dev` as that's where we
       // will be returning.  We add an additional query parameter
       // defined by [queryParamRedirectBeforeLogin] to indicate that we
@@ -311,7 +311,7 @@ class GitHubUIController {
       // Change scheme and port also in case those were different also.
       final newUrl = curUrl.replace(
           scheme: 'https',
-          host: 'dartpad.dev',
+          host: 'try.fwfh.dev',
           port: 443,
           queryParameters: params);
       window.location.href = newUrl.toString();

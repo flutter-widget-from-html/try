@@ -14,7 +14,7 @@ import '../util/detect_flutter.dart' as detect_flutter;
 import '../util/github.dart';
 import 'exercise_metadata.dart';
 
-final String _dartpadLink = '[dartpad.dev](https://dartpad.dev)';
+final String _dartpadLink = '[try.fwfh.dev](https://try.fwfh.dev)';
 
 final RegExp _gistRegex = RegExp(r'^[0-9a-f]+$');
 
