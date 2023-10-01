@@ -9,6 +9,16 @@ part of 'common_server_api.dart';
 Router _$CommonServerApiRouter(CommonServerApi service) {
   final router = Router();
   router.add(
+    'GET',
+    r'/loaderio-b6948a9e338eae5a859ec9f8d4e7721d.txt',
+    service.loaderVerifyRailway,
+  );
+  router.add(
+    'GET',
+    r'/loaderio-ed3b31a9a8c4f65755f91230534729fb.txt',
+    service.loaderVerifyCloudRun,
+  );
+  router.add(
     'POST',
     r'/api/dartservices/<apiVersion>/analyze',
     service.analyze,

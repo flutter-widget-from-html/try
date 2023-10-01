@@ -31,6 +31,16 @@ class CommonServerApi {
 
   CommonServerApi(this._impl);
 
+  @Route.get('/loaderio-b6948a9e338eae5a859ec9f8d4e7721d.txt')
+  Future<Response> loaderVerifyRailway(Request request) async {
+    return Response.ok('loaderio-b6948a9e338eae5a859ec9f8d4e7721d');
+  }
+
+  @Route.get('/loaderio-ed3b31a9a8c4f65755f91230534729fb.txt')
+  Future<Response> loaderVerifyCloudRun(Request request) async {
+    return Response.ok('loaderio-ed3b31a9a8c4f65755f91230534729fb');
+  }
+
   @Route.post('$protoApiUrlPrefix/analyze')
   Future<Response> analyze(Request request, String apiVersion) {
     return _processRequest(
