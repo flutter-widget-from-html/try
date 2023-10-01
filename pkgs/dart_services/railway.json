@@ -8,7 +8,6 @@
     ]
   },
   "deploy": {
-    "sleepApplication": true,
-    "startCommand": "/bin/sh -c \"dart bin/server.dart --redis-url=$REDIS_URL --channel=stable\""
+    "sleepApplication": true
   }
 }
