@@ -1,5 +1,5 @@
 steps:
-  - name: gcr.io/$PROJECT_ID/flutter:main
+  - name: gcr.io/$PROJECT_ID/flutter
     args: ['build', 'web']
     dir: pkgs/dartpad_ui
   - name: gcr.io/$PROJECT_ID/firebase
