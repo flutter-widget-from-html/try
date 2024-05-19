@@ -47,6 +47,7 @@ class ProjectTemplates {
 /// The set of supported Flutter-oriented packages.
 const Set<String> supportedFlutterPackages = {
   'animations',
+  'carousel_slider',
   'creator',
   'flame',
   'flame_fire_atlas',
@@ -60,6 +61,8 @@ const Set<String> supportedFlutterPackages = {
   'flutter_markdown',
   'flutter_riverpod',
   'flutter_svg',
+  'flutter_widget_from_html',
+  'flutter_widget_from_html_core',
   'go_router',
   'google_fonts',
   'google_generative_ai',

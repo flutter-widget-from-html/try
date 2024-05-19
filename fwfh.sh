@@ -11,3 +11,7 @@ gcloud builds submit . \
 gcloud builds submit . \
   --config=.cloud_build/firebase/cloudbuild.yaml \
   --project=$GCP_PROJECT
+
+# Optional: update sample or FWFH packages
+( cd pkgs/dart_services && dart run grinder update-pub-dependencies )
+( cd pkgs/samples && dart tool/samples.dart )
