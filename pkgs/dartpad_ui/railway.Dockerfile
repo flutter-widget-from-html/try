@@ -7,6 +7,9 @@ COPY pkgs/dartpad_shared .
 WORKDIR /pkgs/dartpad_ui
 COPY pkgs/dartpad_ui .
 
+# Patch stable channel URL to use relative path, it will be proxied via Caddy
+RUN sed -i'' 's#https://stable.api.dartpad.dev/#/#' ./lib/model.dart && cat ./lib/model.dart
+
 RUN flutter build web
 
 FROM caddy:alpine

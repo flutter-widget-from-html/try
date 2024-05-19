@@ -894,8 +894,6 @@ class StatusLineWidget extends StatelessWidget {
             ),
           const Expanded(child: SizedBox(width: defaultSpacing)),
           VersionInfoWidget(appModel.runtimeVersions),
-          const SizedBox(width: defaultSpacing),
-          const SizedBox(height: 26, child: SelectChannelWidget()),
         ],
       ),
     );
