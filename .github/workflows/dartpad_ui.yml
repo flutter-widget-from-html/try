@@ -1,0 +1,35 @@
+name: package:dartpad_ui
+
+permissions: read-all
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/dartpad_ui.yml'
+      - 'pkgs/dartpad_ui/**'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '.github/workflows/dartpad_ui.yml'
+      - 'pkgs/dartpad_ui/**'
+  schedule:
+    - cron: '0 0 * * 0' # weekly
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pkgs/dartpad_ui/
+    steps:
+      - uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b
+      - uses: subosito/flutter-action@44ac965b96f18d999802d4b807e3256d5a3f9fa1
+        with:
+          channel: main
+      - run: flutter --version
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: dart format --set-exit-if-changed .
+      - run: flutter build web
+      - run: flutter test

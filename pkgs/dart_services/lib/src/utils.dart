@@ -2,6 +2,8 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
+import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
@@ -51,9 +53,9 @@ Future<Process> runWithLogging(
   required void Function(String) log,
 }) async {
   log([
-    'Running $executable ${arguments.join(' ')}',
-    if (workingDirectory != null) "from directory: '$workingDirectory'",
-    if (environment.isNotEmpty) 'with additional environment: $environment',
+    '${path.basename(executable)} ${arguments.join(' ')}:',
+    if (workingDirectory != null) 'cwd: $workingDirectory',
+    if (environment.isNotEmpty) 'env: $environment',
   ].join('\n  '));
 
   final process = await Process.start(executable, arguments,
@@ -61,9 +63,70 @@ Future<Process> runWithLogging(
       environment: environment,
       includeParentEnvironment: true,
       runInShell: Platform.isWindows);
-  process.stdout.listen((out) => log(systemEncoding.decode(out)));
-  process.stderr.listen((err) => log(systemEncoding.decode(err)));
+  process.stdout.listen((out) => log(systemEncoding.decode(out).trimRight()));
+  process.stderr.listen((out) => log(systemEncoding.decode(out).trimRight()));
   return process;
+}
+
+class TaskScheduler {
+  final Queue<_SchedulerTask<Object?>> _taskQueue = Queue();
+  bool _isActive = false;
+
+  int get queueCount => _taskQueue.length;
+
+  Future<T> _performTask<T>(SchedulerTask<T> task) {
+    return task.perform().timeout(task.timeoutDuration);
+  }
+
+  Future<T> schedule<T>(SchedulerTask<T> task) {
+    if (!_isActive) {
+      _isActive = true;
+      return _performTask(task).whenComplete(_next);
+    }
+
+    final taskResult = Completer<T>();
+    _taskQueue.add(_SchedulerTask<T>(task, taskResult));
+    return taskResult.future;
+  }
+
+  void _next() {
+    assert(_isActive);
+    if (_taskQueue.isEmpty) {
+      _isActive = false;
+      return;
+    }
+
+    final first = _taskQueue.removeFirst();
+    first.taskResult.complete(_performTask(first.task).whenComplete(_next));
+  }
+}
+
+// Internal unit of scheduling.
+class _SchedulerTask<T> {
+  final SchedulerTask<T> task;
+  final Completer<T> taskResult;
+
+  _SchedulerTask(this.task, this.taskResult);
+}
+
+// Public working data structure.
+abstract class SchedulerTask<T> {
+  final Duration timeoutDuration;
+
+  SchedulerTask({required this.timeoutDuration});
+
+  Future<T> perform();
+}
+
+class ClosureTask<T> extends SchedulerTask<T> {
+  final Future<T> Function() _closure;
+
+  ClosureTask(this._closure, {required super.timeoutDuration});
+
+  @override
+  Future<T> perform() {
+    return _closure();
+  }
 }
 
 /// A pattern which matches a possible path.
@@ -71,3 +134,37 @@ Future<Process> runWithLogging(
 /// This pattern is essentially "possibly some letters and colons, followed by a
 /// slash, followed by non-whitespace."
 final _possiblePathPattern = RegExp(r'[a-zA-Z:]*\/\S*');
+
+class Lines {
+  final List<int> _starts = [];
+
+  Lines(String source) {
+    final units = source.codeUnits;
+    var nextIsEol = true;
+    for (var i = 0; i < units.length; i++) {
+      if (nextIsEol) {
+        nextIsEol = false;
+        _starts.add(i);
+      }
+      if (units[i] == 10) nextIsEol = true;
+    }
+  }
+
+  /// Return the 1-based line number.
+  int lineForOffset(int offset) {
+    if (_starts.isEmpty) return 1;
+    for (var i = 1; i < _starts.length; i++) {
+      if (offset < _starts[i]) return i;
+    }
+    return _starts.length;
+  }
+
+  /// Return the 1-based column number.
+  int columnForOffset(int offset) {
+    if (_starts.isEmpty) return 1;
+    for (var i = _starts.length - 1; i >= 0; i--) {
+      if (offset >= _starts[i]) return offset - _starts[i] + 1;
+    }
+    return 1;
+  }
+}

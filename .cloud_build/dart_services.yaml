@@ -1,0 +1,101 @@
+steps:
+  # Precache Flutter web SDK
+  - name: gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+    id: Precache Flutter web SDK
+    entrypoint: flutter
+    args:
+      - precache
+      - --web
+      - --no-android
+      - --no-linux
+      - --no-windows
+      - --no-macos
+      - --no-fuchsia
+    dir: pkgs/dart_services
+
+  # Run pub get
+  - name: gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+    id: Run pub get
+    entrypoint: dart
+    args:
+      - pub
+      - get
+    env:
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+    dir: pkgs/dart_services
+
+  # Build storage artifacts
+  - name: gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+    id: Build storage artifacts
+    entrypoint: dart
+    args:
+      - tool/grind.dart
+      - build-storage-artifacts
+    env:
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+    dir: pkgs/dart_services
+
+  # Save flutter version to a file
+  - name: gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+    id: Save flutter version
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        echo $(cat /opt/flutter/bin/cache/dart-sdk/version) > /workspace/dart_version.txt
+    env:
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+    dir: pkgs/dart_services
+
+  # Upload storage artifacts
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: Upload storage artifacts
+    entrypoint: bash
+    args:
+      - -c
+      - |
+          echo "Uploading storage artifact for version $(cat /workspace/dart_version.txt)" && gsutil -h "Cache-Control: public, max-age=604800, immutable" cp -z js artifacts/*.js* gs://${_STORAGE_BUCKET}/$(cat /workspace/dart_version.txt)/
+    env:
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+    dir: pkgs/dart_services
+
+  # Validate storage artifacts
+  - name: gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+    id: Validate storage artifacts
+    entrypoint: dart
+    args:
+      - tool/grind.dart
+      - validate-storage-artifacts
+      - --bucket=${_STORAGE_BUCKET}
+    env:
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+    dir: pkgs/dart_services
+
+  # Build the container image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - build
+      - -t
+      - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA
+      - --build-arg
+      - PROJECT_ID=$PROJECT_ID
+      - --build-arg
+      - FLUTTER_CHANNEL=${_FLUTTER_CHANNEL}
+      - --build-arg
+      - BUILD_SHA=${SHORT_SHA}
+      - --file
+      - pkgs/dart_services/Dockerfile
+      - .
+    dir: .
+
+  # Push the container image to Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - push
+      - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA
+    dir: pkgs/dart_services
+
+timeout: 1200s
+images:
+  - gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
+  - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:${COMMIT_SHA}

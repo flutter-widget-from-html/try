@@ -1,14 +1,7 @@
 steps:
-  - name: ghcr.io/cirruslabs/flutter:stable
-    entrypoint: 'dart'
-    args: ['pub', 'get']
-    dir: pkgs/dart_pad
-  - name: ghcr.io/cirruslabs/flutter:stable
-    entrypoint: 'dart'
-    args: ['run', 'tool/grind.dart', 'build']
-    dir: pkgs/dart_pad
+  - name: gcr.io/$PROJECT_ID/flutter
+    args: ['build', 'web']
+    dir: pkgs/dartpad_ui
   - name: gcr.io/$PROJECT_ID/firebase
-    # TODO: use official Docker image when it's available
-    # https://github.com/firebase/firebase-tools/issues/1644
-    args: ['deploy', '--project=$PROJECT_ID', '--only=hosting']
-    dir: pkgs/dart_pad
+    args: ['deploy', '--project=$PROJECT_ID', '--only', 'hosting:dartpad']
+    dir: pkgs/dartpad_ui

@@ -6,7 +6,7 @@ import 'dart:convert' show jsonDecode;
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
-import 'project.dart';
+import 'project_templates.dart';
 import 'sdk.dart';
 import 'utils.dart';
 
@@ -40,7 +40,7 @@ class ProjectCreator {
     final projectPath = path.join(_templatesPath, 'dart_project');
     final projectDirectory = Directory(projectPath);
     await projectDirectory.create(recursive: true);
-    final dependencies = _dependencyVersions(supportedBasicDartPackages());
+    final dependencies = _dependencyVersions(supportedBasicDartPackages);
     File(path.join(projectPath, 'pubspec.yaml'))
         .writeAsStringSync(createPubspec(
       includeFlutterWeb: false,
@@ -48,54 +48,28 @@ class ProjectCreator {
       dependencies: dependencies,
     ));
 
-    // todo: run w/ the correct sdk
     final exitCode = await _runDartPubGet(projectDirectory);
-    if (exitCode != 0) throw StateError('pub get failed ($exitCode)');
-
-    var contents = '''
-include: package:lints/recommended.yaml
-linter:
-  rules:
-    avoid_print: false
-''';
-    if (_sdk.experiments.isNotEmpty) {
-      contents += '''
-analyzer:
-  enable-experiment:
-${_sdk.experiments.map((experiment) => '    - $experiment').join('\n')}
-''';
+    if (exitCode != 0) {
+      throw StateError('pub get failed ($exitCode)');
     }
+
     File(path.join(projectPath, 'analysis_options.yaml'))
-        .writeAsStringSync(contents);
+        .writeAsStringSync(_createAnalysisOptionsContents());
   }
 
   /// Builds a Flutter project template directory, complete with `pubspec.yaml`,
   /// `analysis_options.yaml`, and `web/index.html`.
-  ///
-  /// Depending on [firebaseStyle], Firebase packages are included in
-  /// `pubspec.yaml` which affects how `flutter packages get` will register
-  /// plugins.
-  Future<void> buildFlutterProjectTemplate(
-      {required FirebaseStyle firebaseStyle}) async {
-    final projectDirName = firebaseStyle == FirebaseStyle.none
-        ? 'flutter_project'
-        : 'firebase_project';
-    final projectPath = path.join(
-      _templatesPath,
-      projectDirName,
-    );
+  Future<void> buildFlutterProjectTemplate() async {
+    final projectPath = path.join(_templatesPath, 'flutter_project');
     await Directory(projectPath).create(recursive: true);
     await Directory(path.join(projectPath, 'lib')).create();
     await Directory(path.join(projectPath, 'web')).create();
     await File(path.join(projectPath, 'web', 'index.html')).create();
-    var packages = {
-      ...supportedBasicDartPackages(),
-      ...supportedFlutterPackages(),
-      if (firebaseStyle != FirebaseStyle.none) ...coreFirebasePackages,
-      if (firebaseStyle == FirebaseStyle.flutterFire)
-        ...registerableFirebasePackages,
-    };
-    final dependencies = _dependencyVersions(packages);
+
+    final dependencies = _dependencyVersions({
+      ...supportedBasicDartPackages,
+      ...supportedFlutterPackages,
+    });
     File(path.join(projectPath, 'pubspec.yaml'))
         .writeAsStringSync(createPubspec(
       includeFlutterWeb: true,
@@ -103,12 +77,10 @@ ${_sdk.experiments.map((experiment) => '    - $experiment').join('\n')}
       dependencies: dependencies,
     ));
 
-    final exitCode = await runFlutterPackagesGet(
-      _sdk.flutterToolPath,
-      projectPath,
-      log: _log,
-    );
-    if (exitCode != 0) throw StateError('flutter pub get failed ($exitCode)');
+    final exitCode = await runFlutterPubGet(_sdk, projectPath, log: _log);
+    if (exitCode != 0) {
+      throw StateError('flutter pub get failed ($exitCode)');
+    }
 
     // Working around Flutter 3.3's deprecation of generated_plugin_registrant.dart
     // Context: https://github.com/flutter/flutter/pull/106921
@@ -121,47 +93,23 @@ ${_sdk.experiments.map((experiment) => '    - $experiment').join('\n')}
           path.join(projectPath, 'lib', 'generated_plugin_registrant.dart'));
     }
 
-    if (firebaseStyle != FirebaseStyle.none) {
-      // `flutter packages get` has been run with a _subset_ of all supported
-      // Firebase packages, the ones that don't require a Firebase app to be
-      // configured in JavaScript, before executing Dart. Now add the full set of
-      // supported Firebase pacakges. This workaround is a very fragile hack.
-      packages = {
-        ...supportedBasicDartPackages(),
-        ...supportedFlutterPackages(),
-        ...firebasePackages,
-      };
-      final dependencies = _dependencyVersions(packages);
-      File(path.join(projectPath, 'pubspec.yaml'))
-          .writeAsStringSync(createPubspec(
-        includeFlutterWeb: true,
-        dartLanguageVersion: _dartLanguageVersion,
-        dependencies: dependencies,
-      ));
+    File(path.join(projectPath, 'analysis_options.yaml'))
+        .writeAsStringSync(_createAnalysisOptionsContents());
+  }
 
-      final exitCode = await runFlutterPackagesGet(
-        _sdk.flutterToolPath,
-        projectPath,
-        log: _log,
-      );
-      if (exitCode != 0) throw StateError('flutter pub get failed ($exitCode)');
-    }
+  String _createAnalysisOptionsContents() {
     var contents = '''
-include: package:flutter_lints/flutter.yaml
-linter:
-  rules:
-    avoid_print: false
-    use_key_in_widget_constructors: false
+include: package:lints/core.yaml
 ''';
     if (_sdk.experiments.isNotEmpty) {
       contents += '''
+
 analyzer:
   enable-experiment:
 ${_sdk.experiments.map((experiment) => '    - $experiment').join('\n')}
 ''';
     }
-    File(path.join(projectPath, 'analysis_options.yaml'))
-        .writeAsStringSync(contents);
+    return contents;
   }
 
   Future<int> _runDartPubGet(Directory dir) async {
@@ -178,29 +126,10 @@ ${_sdk.experiments.map((experiment) => '    - $experiment').join('\n')}
   Map<String, String> _dependencyVersions(Iterable<String> packages) {
     final allVersions =
         parsePubDependenciesFile(dependenciesFile: _dependenciesFile);
-    final result = {
+    return {
       for (final package in packages) package: allVersions[package] ?? 'any',
     };
-
-    // Overwrite with important constraints.
-    for (final entry in overrideVersionConstraints().entries) {
-      if (result.containsKey(entry.key)) {
-        result[entry.key] = entry.value;
-      }
-    }
-
-    return result;
   }
-}
-
-/// A mapping of version constraints for certain packages.
-Map<String, String> overrideVersionConstraints() {
-  // Ensure that pub version solving keeps these at sane minimum versions.
-  return {
-    'firebase_auth': '^4.2.0',
-    'firebase_auth_web': '^5.2.0',
-    'cloud_firestore_platform_interface': '^5.10.0',
-  };
 }
 
 /// Parses [dependenciesFile] as a JSON Map of Strings.
@@ -210,7 +139,7 @@ Map<String, String> parsePubDependenciesFile({required File dependenciesFile}) {
   return packageVersions.cast<String, String>();
 }
 
-/// Build a return a `pubspec.yaml` file.
+/// Build and return a `pubspec.yaml` file.
 String createPubspec({
   required bool includeFlutterWeb,
   required String dartLanguageVersion,
@@ -238,16 +167,18 @@ dependencies:
   return content;
 }
 
-Future<int> runFlutterPackagesGet(
-  String flutterToolPath,
+Future<int> runFlutterPubGet(
+  Sdk sdk,
   String projectPath, {
   required LogFunction log,
 }) async {
-  final process = await runWithLogging(flutterToolPath,
-      arguments: ['packages', 'get'],
-      workingDirectory: projectPath,
-      environment: {'PUB_CACHE': _pubCachePath},
-      log: log);
+  final process = await runWithLogging(
+    sdk.flutterToolPath,
+    arguments: ['pub', 'get'],
+    workingDirectory: projectPath,
+    environment: {'PUB_CACHE': _pubCachePath},
+    log: log,
+  );
   return process.exitCode;
 }
 
@@ -256,12 +187,4 @@ String get _pubCachePath {
   final pubCachePath = path.join(Directory.current.path, 'local_pub_cache');
   Directory(pubCachePath).createSync();
   return pubCachePath;
-}
-
-enum FirebaseStyle {
-  /// Indicates that no Firebase is used.
-  none,
-
-  /// Indicates that the "pure Dart" Flutterfire packages are used.
-  flutterFire,
 }
