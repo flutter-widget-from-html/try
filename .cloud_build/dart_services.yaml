@@ -95,27 +95,6 @@ steps:
       - gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA
     dir: pkgs/dart_services
 
-  # Deploy container image to Cloud Run
-  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
-    id: Deploy to Cloud Run
-    entrypoint: gcloud
-    args:
-      - run
-      - deploy
-      - $_SERVICE_NAME
-      - --image=gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$COMMIT_SHA
-      - --platform=managed
-      - --region=${_DEPLOY_REGION}
-      - --min-instances=5
-      - --quiet
-      - --cpu=2
-      - --memory=4Gi
-      - --concurrency=2
-      - --cpu-boost
-      - --max-instances=1000
-      - --command=bin/server
-      - --args=--redis-url=redis://${_REDIS_ADDR},--storage-bucket=${_STORAGE_BUCKET}
-    dir: pkgs/dart_services
 timeout: 1200s
 images:
   - gcr.io/$PROJECT_ID/flutter:${_FLUTTER_CHANNEL}
