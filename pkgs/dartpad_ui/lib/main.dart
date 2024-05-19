@@ -666,18 +666,6 @@ class DartPadAppBar extends StatelessWidget implements PreferredSizeWidget {
               Text(appName,
                   style: TextStyle(
                       color: Theme.of(context).colorScheme.onSurface)),
-              // Hide new snippet buttons when the screen width is too small.
-              if (constraints.maxWidth > smallScreenWidth) ...[
-                const SizedBox(width: defaultSpacing * 4),
-                NewSnippetWidget(appServices: appServices),
-                const SizedBox(width: denseSpacing),
-                const ListSamplesWidget(),
-              ] else ...[
-                const SizedBox(width: defaultSpacing),
-                NewSnippetWidget(appServices: appServices, smallIcon: true),
-                const SizedBox(width: defaultSpacing),
-                const ListSamplesWidget(smallIcon: true),
-              ],
 
               const SizedBox(width: defaultSpacing),
               // Hide the snippet title when the screen width is too small.
@@ -690,33 +678,15 @@ class DartPadAppBar extends StatelessWidget implements PreferredSizeWidget {
                     ),
                   ),
                 ),
-              const SizedBox(width: defaultSpacing),
             ],
           ),
         ),
         bottom: bottom,
         actions: [
-          // Hide the Install SDK button when the screen width is too small.
-          if (constraints.maxWidth > smallScreenWidth)
-            TextButton(
-              onPressed: () {
-                url_launcher.launchUrl(
-                  Uri.parse('https://docs.flutter.dev/get-started/install'),
-                );
-              },
-              child: const Row(
-                children: [
-                  Text('Install SDK'),
-                  SizedBox(width: denseSpacing),
-                  Icon(Icons.launch, size: 18),
-                ],
-              ),
-            ),
-          const SizedBox(width: denseSpacing),
           _BrightnessButton(
             handleBrightnessChange: widget.handleBrightnessChanged,
           ),
-          const OverflowMenu(),
+          const SizedBox(width: denseSpacing),
         ],
       );
     });
@@ -862,36 +832,6 @@ class StatusLineWidget extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: defaultSpacing),
-          if (!mobileVersion)
-            TextButton(
-              onPressed: () {
-                const url = 'https://dart.dev/tools/dartpad/privacy';
-                url_launcher.launchUrl(Uri.parse(url));
-              },
-              child: const Row(
-                children: [
-                  Text('Privacy notice'),
-                  SizedBox(width: denseSpacing),
-                  Icon(Icons.launch, size: 16),
-                ],
-              ),
-            ),
-          const SizedBox(width: defaultSpacing),
-          if (!mobileVersion)
-            TextButton(
-              onPressed: () {
-                const url = 'https://github.com/dart-lang/dart-pad/issues';
-                url_launcher.launchUrl(Uri.parse(url));
-              },
-              child: const Row(
-                children: [
-                  Text('Feedback'),
-                  SizedBox(width: denseSpacing),
-                  Icon(Icons.launch, size: 16),
-                ],
-              ),
-            ),
           const Expanded(child: SizedBox(width: defaultSpacing)),
           VersionInfoWidget(appModel.runtimeVersions),
         ],
