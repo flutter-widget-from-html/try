@@ -413,7 +413,7 @@ class AppServices {
 }
 
 enum Channel {
-  stable('Stable', 'https://stable.api.dartpad.dev/'),
+  stable('Stable', 'https://stable.api.fwfh.dev/'),
   beta('Beta', 'https://beta.api.dartpad.dev/'),
   main('Main', 'https://master.api.dartpad.dev/'),
   // This channel is only used for local development.
