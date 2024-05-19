@@ -29,7 +29,7 @@ import 'theme.dart';
 import 'versions.dart';
 import 'widgets.dart';
 
-const appName = 'DartPad';
+const appName = 'Playground';
 const smallScreenWidth = 720;
 
 void main() async {

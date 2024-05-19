@@ -1,6 +1,6 @@
 {
-    "name": "DartPad",
-    "short_name": "DartPad",
+    "name": "HtmlWidget Playground",
+    "short_name": "HtmlWidget",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
