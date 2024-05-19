@@ -12,12 +12,11 @@ on:
       - '.github/workflows/dart_services.yml'
       - 'pkgs/dart_services/**'
   schedule:
-    - cron: '0 0 * * 0' # weekly
+    - cron: '0 0 * * *' # daily
 
 jobs:
-  # Check code formatting, static analysis, and build on a single OS (linux)
-  # against Dart stable and beta.
-  analyze:
+  # Check code formatting, static analysis, and build on a single OS (linux).
+  verify:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,53 +26,27 @@ jobs:
       matrix:
         sdk: [stable, beta, main]
     steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
-      - uses: dart-lang/setup-dart@d6a63dab3335f427404425de0fbfed4686d93c4f
-      - name: Install dependencies
-        run: sudo apt-get install -y protobuf-compiler redis
-      - name: Install dependencies
-        run: dart pub get
-      - name: Analyze code
-        run: dart analyze --fatal-infos .
-      - name: check formatting
-        run: dart format --set-exit-if-changed lib test tool  
-      - name: Prepare Flutter
-        run: |
-          dart run tool/update_sdk.dart ${{ matrix.sdk }}
-          export PATH=$PATH:$PWD/flutter-sdks/${{ matrix.sdk }}/bin
-          flutter doctor -v
-          flutter config --enable-web
-      - name: Run tests
-        env:
-          FLUTTER_CHANNEL: ${{ matrix.sdk }}
-        run: |
-          export PATH=$PATH:$HOME/.pub-cache/bin
-          dart pub global activate protoc_plugin
-          # Prepare to run unit tests (but do not actually run tests).
-          dart run grinder buildbot
-          # Ensure that we've uploaded the compilation artifacts to google storage.
-          dart run grinder validate-storage-artifacts
-          dart test
+      - uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b
+      - uses: subosito/flutter-action@44ac965b96f18d999802d4b807e3256d5a3f9fa1
+        with:
+            channel: ${{ matrix.sdk }}
+      - run: flutter --version
 
-  # Run the benchmarks on the bots to ensure they don't regress.
-  benchmark:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: pkgs/dart_services/
-    steps:
-      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744
-      - uses: dart-lang/setup-dart@d6a63dab3335f427404425de0fbfed4686d93c4f
-      - run: sudo apt-get install -y protobuf-compiler redis
-      - run: dart pub get
-      - name: Download the Flutter SDK
-        run: |
-          dart run tool/update_sdk.dart stable
-          export PATH=$PATH:$PWD/flutter-sdks/stable/bin
-          flutter doctor -v
-      - name: Prep the repo
-        env:
-          FLUTTER_CHANNEL: stable
-        run: dart run grinder buildbot
-      - name: Run benchmarks
-        run: dart benchmark/bench.dart
+      - name: Install dart dependencies
+        run: dart pub get
+
+      - name: Analyze project source
+        run: dart analyze --fatal-infos
+
+      - name: Verify formatting
+        run: dart format --set-exit-if-changed bin lib test tool
+
+      - name: Create template projects and populate the custom pub cache
+        run: dart run grinder build-project-templates
+
+      # Build the web artifacts on the bots to ensure they don't regress.
+      - name: Build web artifacts
+        run: dart run grinder build-storage-artifacts
+
+      - name: Run tests
+        run: dart test

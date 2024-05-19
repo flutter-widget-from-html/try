@@ -2,287 +2,172 @@
 // for details. All rights reserved. Use of this source code is governed by a
 // BSD-style license that can be found in the LICENSE file.
 
-import 'dart:async';
-import 'dart:convert' show utf8;
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as path;
-import 'package:yaml/yaml.dart';
 
-const stableChannel = 'stable';
+import 'experiments.dart';
 
-class Sdk {
-  static Sdk? _instance;
+/// Information about the device's currently configured Flutter SDK
+/// and its embedded Dart SDK.
+final class Sdk {
+  /// The path to the Dart SDK (vended into the Flutter SDK).
+  final String dartSdkPath;
 
-  final String sdkPath;
+  /// The path to the Flutter SDK.
+  final String flutterSdkPath;
+
+  /// The path to the Flutter CLI tool.
+  final String flutterToolPath;
 
   /// The path to the Flutter binaries.
   final String _flutterBinPath;
 
-  /// The path to the Dart SDK.
-  final String dartSdkPath;
+  /// The current version of the Dart SDK, including any `-dev` suffix.
+  final String dartVersion;
 
-  /// The current version of the SDK, including any `-dev` suffix.
-  final String versionFull;
-
+  /// The current version of the Flutter SDK.
   final String flutterVersion;
 
-  /// The current version of the Flutter engine
+  /// The current version of the Flutter engine.
   final String engineVersion;
 
-  /// The current version of the SDK, not including any `-dev` suffix.
-  final String version;
+  /// The channel for this SDK.
+  final String channel;
 
-  /// If this is the stable channel.
-  bool get stableChannel => _channel == 'stable';
+  /// If this [Sdk] is from the `stable` channel.
+  bool get stableChannel => channel == 'stable';
 
-  /// If this is the beta channel.
-  bool get betaChannel => _channel == 'beta';
+  /// If this [Sdk] is from the `beta` channel.
+  bool get betaChannel => channel == 'beta';
 
-  /// If this is the main channel.
-  bool get mainChannel => _channel == 'main';
+  /// If this [Sdk] is from the `main` channel.
+  bool get mainChannel => channel == 'main';
 
-  // Which channel is this SDK?
-  final String _channel;
-
-  /// Experiments that this SDK is configured with
-  List<String> get experiments {
-    if (mainChannel) return const ['inline-class'];
-    return const [];
-  }
-
-  factory Sdk.create(String channel) {
-    final sdkPath = path.join(Sdk._flutterSdksPath, channel);
-    final flutterBinPath = path.join(sdkPath, 'bin');
-    final dartSdkPath = path.join(flutterBinPath, 'cache', 'dart-sdk');
-    final engineVersionPath =
-        path.join(flutterBinPath, 'internal', 'engine.version');
-    return _instance ??= Sdk._(
-      sdkPath: sdkPath,
-      flutterBinPath: flutterBinPath,
-      dartSdkPath: dartSdkPath,
-      versionFull: _readVersionFile(dartSdkPath),
-      flutterVersion: _readVersionFile(sdkPath),
-      engineVersion: _readFile(engineVersionPath),
-      channel: channel,
-    );
-  }
+  /// The experiments to use for the current [channel].
+  List<String> get experiments =>
+      (mainChannel || betaChannel) ? enabledExperiments : const [];
 
   Sdk._({
-    required this.sdkPath,
-    required String flutterBinPath,
+    required this.channel,
     required this.dartSdkPath,
-    required this.versionFull,
+    required this.dartVersion,
+    required String flutterBinPath,
+    required this.flutterToolPath,
+    required this.flutterSdkPath,
     required this.flutterVersion,
     required this.engineVersion,
-    required String channel,
-  })  : _flutterBinPath = flutterBinPath,
-        _channel = channel,
-        version = versionFull.contains('-')
-            ? versionFull.substring(0, versionFull.indexOf('-'))
-            : versionFull;
+  }) : _flutterBinPath = flutterBinPath;
 
-  /// The path to the 'flutter' tool (binary).
-  String get flutterToolPath => path.join(_flutterBinPath, 'flutter');
+  /// Create an [Sdk] to track the location and version information
+  /// of the Flutter SDK used to run `dart_services`, or if not valid,
+  /// the one configured using the `FLUTTER_ROOT` environment variable.
+  factory Sdk.fromLocalFlutter() {
+    // Note below, 'Platform.resolvedExecutable' will not lead to a real SDK if
+    // we've been compiled into an AOT binary. In those cases we fall back to
+    // looking for a 'FLUTTER_ROOT' environment variable.
 
-  String get flutterWebSdkPath {
-    return path.join(_flutterBinPath, 'cache', 'flutter_web_sdk', 'kernel');
-  }
+    // <flutter-sdk>/bin/cache/dart-sdk/bin/dart
+    final potentialFlutterSdkPath = path.dirname(path.dirname(
+        path.dirname(path.dirname(path.dirname(Platform.resolvedExecutable)))));
 
-  static String _readVersionFile(String filePath) =>
-      _readFile(path.join(filePath, 'version'));
-
-  /// Get the path to the Flutter SDKs.
-  static String get _flutterSdksPath =>
-      path.join(Directory.current.path, 'flutter-sdks');
-}
-
-const channels = ['stable', 'beta', 'main'];
-
-class DownloadingSdkManager {
-  final String channel;
-  final String flutterVersion;
-
-  DownloadingSdkManager._(this.channel, this.flutterVersion);
-
-  factory DownloadingSdkManager(String channel) {
-    if (!channels.contains(channel)) {
-      throw StateError('Unknown channel name: $channel');
-    }
-    final flutterVersion =
-        _readVersionMap(channel)['flutter_version'] as String;
-    return DownloadingSdkManager._(channel, flutterVersion);
-  }
-
-  /// Creates a Flutter SDK in `flutter-sdks/` that is configured using the
-  /// `flutter-sdk-version.yaml` file.
-  ///
-  /// Note that this is an expensive operation.
-  Future<String> createFromConfigFile() async {
-    final sdk = await _cloneSdkIfNecessary(channel);
-
-    // git checkout master
-    await sdk.checkout('master');
-    // git fetch --tags
-    await sdk.fetchTags();
-    // git checkout 1.25.0-8.1.pre
-    await sdk.checkout(flutterVersion);
-
-    // Force downloading of Dart SDK before constructing the Sdk singleton.
-    final exitCode = await sdk.init();
-    if (exitCode != 0) {
-      throw StateError('Initializing Flutter SDK resulted in error: $exitCode');
+    final String flutterSdkPath;
+    if (_validFlutterSdk(potentialFlutterSdkPath)) {
+      flutterSdkPath = potentialFlutterSdkPath;
+    } else {
+      final flutterRootPath = Platform.environment['FLUTTER_ROOT'];
+      if (flutterRootPath == null || !_validFlutterSdk(flutterRootPath)) {
+        throw StateError('Flutter SDK not found');
+      }
+      flutterSdkPath = flutterRootPath;
     }
 
-    return sdk.flutterSdkPath;
-  }
+    final flutterBinPath = path.join(flutterSdkPath, 'bin');
+    final flutterToolPath = path.join(flutterBinPath, 'flutter');
+    final dartSdkPath = path.join(flutterSdkPath, 'bin', 'cache', 'dart-sdk');
+    final dartVersion = _readDartSdkVersionFile(dartSdkPath);
 
-  Future<_DownloadedFlutterSdk> _cloneSdkIfNecessary(String channel) async {
-    final sdkPath = path.join(Sdk._flutterSdksPath, channel);
-    final sdk = _DownloadedFlutterSdk(sdkPath);
+    final versions = _retrieveFlutterVersion(flutterSdkPath, flutterToolPath);
 
-    if (!Directory(sdk.flutterSdkPath).existsSync()) {
-      // This takes perhaps ~20 seconds.
-      await sdk.clone(
-        [
-          'https://github.com/flutter/flutter',
-          sdk.flutterSdkPath,
-        ],
-        cwd: Directory.current.path,
-      );
-    }
+    final flutterVersion = versions['flutterVersion'] as String;
+    final engineVersion = versions['engineRevision'] as String;
 
-    return sdk;
-  }
-}
+    final rawChannel = versions['channel'] as String;
+    // Report the 'master' channel as 'main';
+    final channel = rawChannel == 'master' ? 'main' : rawChannel;
+    assert(const {'stable', 'beta', 'main'}.contains(channel));
 
-String readDartLanguageVersion(String channelName) =>
-    _readVersionMap(channelName)['dart_language_version'] as String;
-
-/// Read and return the Flutter SDK configuration file info
-/// (`flutter-sdk-version.yaml`).
-Map<String, Object> _readVersionMap(String channelName) {
-  final file = File(path.join(Directory.current.path, _flutterSdkConfigFile));
-  final sdkConfig =
-      (loadYaml(file.readAsStringSync()) as Map).cast<String, Object>();
-
-  if (!sdkConfig.containsKey('flutter_sdk')) {
-    throw StateError("No key 'flutter_sdk' found in '$_flutterSdkConfigFile'");
-  }
-  final flutterConfig = sdkConfig['flutter_sdk'] as Map;
-  if (!flutterConfig.containsKey(channelName)) {
-    throw StateError("No key '$channelName' found in '$_flutterSdkConfigFile'");
-  }
-  final channelConfig = flutterConfig[channelName] as Map;
-  if (!channelConfig.containsKey('flutter_version')) {
-    throw StateError(
-        "No key 'flutter_version' found in '$_flutterSdkConfigFile'");
-  }
-  if (!channelConfig.containsKey('dart_language_version')) {
-    throw StateError(
-        "No key 'dart_language_version' found in '$_flutterSdkConfigFile'");
-  }
-  return channelConfig.cast<String, Object>();
-}
-
-const String _flutterSdkConfigFile = 'flutter-sdk-version.yaml';
-
-class _DownloadedFlutterSdk {
-  final String flutterSdkPath;
-
-  _DownloadedFlutterSdk(this.flutterSdkPath);
-
-  Future<int> init() =>
-      // `flutter --version` takes ~28s.
-      _execLog(path.join('bin', 'flutter'), ['--version'], flutterSdkPath);
-
-  String get sdkPath => path.join(flutterSdkPath, 'bin', 'cache', 'dart-sdk');
-
-  String get versionFull => _readFile(path.join(sdkPath, 'version'));
-
-  String get flutterVersion => _readFile(path.join(flutterSdkPath, 'version'));
-
-  /// Perform a git clone, logging the command and any output, and throwing an
-  /// exception if there are any issues with the clone.
-  Future<void> clone(List<String> args, {required String cwd}) async {
-    await _execLog('git', ['clone', ...args], cwd, throwOnError: true);
-  }
-
-  Future<void> checkout(String branch) async {
-    await _execLog('git', ['checkout', branch], flutterSdkPath,
-        throwOnError: true);
-  }
-
-  Future<void> fetchTags() async {
-    await _execLog('git', ['fetch', '--tags'], flutterSdkPath,
-        throwOnError: true);
-  }
-
-  Future<void> pull() async {
-    await _execLog('git', ['pull'], flutterSdkPath, throwOnError: true);
-  }
-
-  Future<void> trackChannel(String channel) async {
-    // git checkout --track -b beta origin/beta
-    await _execLog(
-        'git',
-        [
-          'checkout',
-          '--track',
-          '-b',
-          channel,
-          'origin/$channel',
-        ],
-        flutterSdkPath,
-        throwOnError: true);
-  }
-
-  Future<bool> checkChannelAvailableLocally(String channel) async {
-    // git show-ref --verify --quiet refs/heads/beta
-    final result = await _execLog(
-      'git',
-      [
-        'show-ref',
-        '--verify',
-        '--quiet',
-        'refs/heads/$channel',
-      ],
-      flutterSdkPath,
+    return Sdk._(
+      channel: channel,
+      dartSdkPath: dartSdkPath,
+      dartVersion: dartVersion,
+      flutterSdkPath: flutterSdkPath,
+      flutterBinPath: flutterBinPath,
+      flutterToolPath: flutterToolPath,
+      flutterVersion: flutterVersion,
+      engineVersion: engineVersion,
     );
-
-    return result == 0;
   }
 
-  Future<int> _execLog(
-    String executable,
-    List<String> arguments,
-    String cwd, {
-    bool throwOnError = false,
-  }) async {
-    print('$executable ${arguments.join(' ')}');
+  String get flutterWebSdkPath =>
+      path.join(_flutterBinPath, 'cache', 'flutter_web_sdk', 'kernel');
 
-    final process = await Process.start(
-      executable,
-      arguments,
-      workingDirectory: cwd,
-    );
-    process.stdout
-        .transform<String>(utf8.decoder)
-        .listen((string) => stdout.write(string));
-    process.stderr
-        .transform<String>(utf8.decoder)
-        .listen((string) => stderr.write(string));
+  bool get usesNewBootstrapEngine {
+    final uiWebPackage =
+        path.join(_flutterBinPath, 'cache', 'flutter_web_sdk', 'lib', 'ui_web');
+    final initializationLibrary =
+        path.join(uiWebPackage, 'ui_web', 'initialization.dart');
 
-    final code = await process.exitCode;
-    if (throwOnError && code != 0) {
-      throw ProcessException(
-          executable,
-          arguments,
-          'Error running ${[executable, ...arguments].take(2).join(' ')}',
-          code);
+    final file = File(initializationLibrary);
+    if (!file.existsSync()) return false;
+
+    // Look for 'Future<void> bootstrapEngine({ ... }) { ... }'.
+    return file.readAsStringSync().contains('bootstrapEngine(');
+  }
+
+  static Map<String, Object?> _retrieveFlutterVersion(
+    String flutterSdkPath,
+    String flutterToolPath,
+  ) {
+    // Note that we try twice here as the 'flutter --version --machine' command
+    // can (erroneously) emit non-json text to stdout (for example, an initial
+    // analytics disclaimer).
+
+    try {
+      return jsonDecode(Process.runSync(
+        flutterToolPath,
+        ['--version', '--machine'],
+        workingDirectory: flutterSdkPath,
+      ).stdout.toString().trim()) as Map<String, Object?>;
+    } on FormatException {
+      return jsonDecode(Process.runSync(
+        flutterToolPath,
+        ['--version', '--machine'],
+        workingDirectory: flutterSdkPath,
+      ).stdout.toString().trim()) as Map<String, Object?>;
     }
-    return code;
+  }
+
+  static String _readDartSdkVersionFile(String filePath) {
+    final file = File(path.join(filePath, 'version'));
+    return file.readAsStringSync().trim();
+  }
+
+  static bool _validFlutterSdk(String sdkPath) {
+    // Verify that this is a Flutter sdk; check for bin/, packages/, and
+    // packages/flutter/.
+    if (!FileSystemEntity.isDirectorySync(sdkPath) ||
+        !FileSystemEntity.isDirectorySync(path.join(sdkPath, 'bin'))) {
+      return false;
+    }
+
+    final packages = path.join(sdkPath, 'packages');
+    if (!FileSystemEntity.isDirectorySync(packages) ||
+        !FileSystemEntity.isDirectorySync(path.join(packages, 'flutter'))) {
+      return false;
+    }
+
+    return true;
   }
 }
-
-String _readFile(String filePath) => File(filePath).readAsStringSync().trim();

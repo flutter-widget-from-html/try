@@ -6,54 +6,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-const Color primaryColor = Colors.orange;
-const TargetPlatform platform = TargetPlatform.android;
+const int maxSeeds = 250;
 
 void main() {
   runApp(const Sunflower());
-}
-
-class SunflowerPainter extends CustomPainter {
-  static const seedRadius = 2.0;
-  static const scaleFactor = 4;
-  static const tau = math.pi * 2;
-
-  static final phi = (math.sqrt(5) + 1) / 2;
-
-  final int seeds;
-
-  SunflowerPainter(this.seeds);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = size.width / 2;
-
-    for (var i = 0; i < seeds; i++) {
-      final theta = i * tau / phi;
-      final r = math.sqrt(i) * scaleFactor;
-      final x = center + r * math.cos(theta);
-      final y = center - r * math.sin(theta);
-      final offset = Offset(x, y);
-      if (!size.contains(offset)) {
-        continue;
-      }
-      drawSeed(canvas, x, y);
-    }
-  }
-
-  @override
-  bool shouldRepaint(SunflowerPainter oldDelegate) {
-    return oldDelegate.seeds != seeds;
-  }
-
-  // Draw a small circle representing a seed centered at (x,y).
-  void drawSeed(Canvas canvas, double x, double y) {
-    final paint = Paint()
-      ..strokeWidth = 2
-      ..style = PaintingStyle.fill
-      ..color = primaryColor;
-    canvas.drawCircle(Offset(x, y), seedRadius, paint);
-  }
 }
 
 class Sunflower extends StatefulWidget {
@@ -66,84 +22,119 @@ class Sunflower extends StatefulWidget {
 }
 
 class _SunflowerState extends State<Sunflower> {
-  double seeds = 100.0;
-
-  int get seedCount => seeds.floor();
+  int seeds = maxSeeds ~/ 2;
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData().copyWith(
-        platform: platform,
+      theme: ThemeData(
         brightness: Brightness.dark,
-        sliderTheme: SliderThemeData.fromPrimaryColors(
-          primaryColor: primaryColor,
-          primaryColorLight: primaryColor,
-          primaryColorDark: primaryColor,
-          valueIndicatorTextStyle: const DefaultTextStyle.fallback().style,
-        ),
+        appBarTheme: const AppBarTheme(elevation: 2),
       ),
+      debugShowCheckedModeBanner: false,
       home: Scaffold(
         appBar: AppBar(
           title: const Text('Sunflower'),
         ),
-        drawer: Drawer(
-          child: ListView(
-            children: const [
-              DrawerHeader(
-                child: Center(
-                  child: Text(
-                    'Sunflower 🌻',
-                    style: TextStyle(fontSize: 32),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        body: Container(
-          constraints: const BoxConstraints.expand(),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: Colors.transparent,
-            ),
-          ),
+        body: Center(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisAlignment: MainAxisAlignment.start,
             children: [
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: Colors.transparent,
-                  ),
-                ),
-                child: SizedBox(
-                  width: 400,
-                  height: 400,
-                  child: CustomPaint(
-                    painter: SunflowerPainter(seedCount),
-                  ),
-                ),
+              Expanded(
+                child: SunflowerWidget(seeds),
               ),
-              Text('Showing $seedCount seeds'),
-              ConstrainedBox(
-                constraints: const BoxConstraints.tightFor(width: 300),
-                child: Slider.adaptive(
-                  min: 20,
-                  max: 2000,
-                  value: seeds,
-                  onChanged: (newValue) {
-                    setState(() {
-                      seeds = newValue;
-                    });
+              const SizedBox(height: 20),
+              Text('Showing ${seeds.round()} seeds'),
+              SizedBox(
+                width: 300,
+                child: Slider(
+                  min: 1,
+                  max: maxSeeds.toDouble(),
+                  value: seeds.toDouble(),
+                  onChanged: (val) {
+                    setState(() => seeds = val.round());
                   },
                 ),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class SunflowerWidget extends StatelessWidget {
+  static const tau = math.pi * 2;
+  static const scaleFactor = 1 / 40;
+  static const size = 600.0;
+  static final phi = (math.sqrt(5) + 1) / 2;
+  static final rng = math.Random();
+
+  final int seeds;
+
+  const SunflowerWidget(this.seeds, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final seedWidgets = <Widget>[];
+
+    for (var i = 0; i < seeds; i++) {
+      final theta = i * tau / phi;
+      final r = math.sqrt(i) * scaleFactor;
+
+      seedWidgets.add(AnimatedAlign(
+        key: ValueKey(i),
+        duration: Duration(milliseconds: rng.nextInt(500) + 250),
+        curve: Curves.easeInOut,
+        alignment: Alignment(r * math.cos(theta), -1 * r * math.sin(theta)),
+        child: const Dot(true),
+      ));
+    }
+
+    for (var j = seeds; j < maxSeeds; j++) {
+      final x = math.cos(tau * j / (maxSeeds - 1)) * 0.9;
+      final y = math.sin(tau * j / (maxSeeds - 1)) * 0.9;
+
+      seedWidgets.add(AnimatedAlign(
+        key: ValueKey(j),
+        duration: Duration(milliseconds: rng.nextInt(500) + 250),
+        curve: Curves.easeInOut,
+        alignment: Alignment(x, y),
+        child: const Dot(false),
+      ));
+    }
+
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        height: size,
+        width: size,
+        child: Stack(children: seedWidgets),
+      ),
+    );
+  }
+}
+
+class Dot extends StatelessWidget {
+  static const size = 5.0;
+  static const radius = 3.0;
+
+  final bool lit;
+
+  const Dot(this.lit, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: lit ? Colors.orange : Colors.grey.shade700,
+        borderRadius: BorderRadius.circular(radius),
+      ),
+      child: const SizedBox(
+        height: size,
+        width: size,
       ),
     );
   }

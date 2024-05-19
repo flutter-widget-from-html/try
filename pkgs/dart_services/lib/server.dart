@@ -9,22 +9,24 @@ import 'package:args/args.dart';
 import 'package:logging/logging.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf;
+import 'package:shelf_gzip/shelf_gzip.dart';
 
-import 'src/common_server_api.dart';
-import 'src/common_server_impl.dart';
-import 'src/github_oauth_handler.dart';
+import 'src/caching.dart';
+import 'src/common_server.dart';
 import 'src/logging.dart';
+import 'src/oauth_handler.dart';
 import 'src/sdk.dart';
-import 'src/server_cache.dart';
 
 final Logger _logger = Logger('services');
 
 Future<void> main(List<String> args) async {
   final parser = ArgParser()
-    ..addOption('channel',
-        valueHelp: 'channel', help: 'The SDK channel (required).')
     ..addOption('port', valueHelp: 'port', help: 'The port to listen on.')
     ..addOption('redis-url', valueHelp: 'url', help: 'The redis server url.')
+    ..addOption('storage-bucket',
+        valueHelp: 'name',
+        help: 'The name of the Cloud Storage bucket for compilation artifacts.',
+        defaultsTo: 'nnbd_artifacts')
     ..addFlag('help',
         abbr: 'h', negatable: false, help: 'Show this usage information.');
 
@@ -35,52 +37,49 @@ Future<void> main(List<String> args) async {
     exit(0);
   }
 
-  if (!results.wasParsed('channel')) {
-    print('error: --channel is required.\n');
-    print(parser.usage);
-    exit(1);
-  }
-
   if (!results.wasParsed('redis-url')) {
     print('warning: no redis server specified.\n');
   }
 
-  final channel = results['channel'] as String;
-  final sdk = Sdk.create(channel);
+  final sdk = Sdk.fromLocalFlutter();
 
-  var port = 8080;
+  final int port;
 
   // Read port from args; fall back to using an env. variable.
   if (results.wasParsed('port')) {
     port = int.parse(results['port'] as String);
-  } else if (Platform.environment.containsKey('PORT')) {
-    port = int.parse(Platform.environment['PORT']!);
+  } else if (Platform.environment['PORT'] case final environmentPath?) {
+    port = int.parse(environmentPath);
+  } else {
+    port = 8080;
   }
 
   Logger.root.level = Level.FINER;
   emitLogsToStdout();
 
   final redisServerUri = results['redis-url'] as String?;
+  final storageBucket =
+      results['storage-bucket'] as String? ?? 'nnbd_artifacts';
 
   final cloudRunEnvVars = Platform.environment.entries
       .where((entry) => entry.key.startsWith('K_'))
-      .map((entry) => '  ${entry.key}: ${entry.value}')
-      .join('\n');
+      .map((entry) => '${entry.key}:${entry.value}')
+      .join(',');
 
   _logger.info('''
-Initializing dart-services:
-port: $port
-sdkPath: ${sdk.dartSdkPath}
-redisServerUri: $redisServerUri
-Cloud Run Environment variables:
-$cloudRunEnvVars'''
+Starting dart-services:
+  port: $port
+  sdkPath: ${sdk.dartSdkPath}
+  redisServerUri: $redisServerUri
+  Cloud Run Environment variables: $cloudRunEnvVars'''
       .trim());
 
   await GitHubOAuthHandler.initFromEnvironmentalVars();
 
-  await EndpointsServer.serve(port, sdk, redisServerUri);
+  final server =
+      await EndpointsServer.serve(port, sdk, redisServerUri, storageBucket);
 
-  _logger.info('Listening on port $port');
+  _logger.info('Listening on port ${server.port}');
 }
 
 class EndpointsServer {
@@ -88,9 +87,11 @@ class EndpointsServer {
     int port,
     Sdk sdk,
     String? redisServerUri,
+    String storageBucket,
   ) async {
-    final endpointsServer = EndpointsServer._(redisServerUri, sdk);
-    await endpointsServer.init();
+    final endpointsServer =
+        EndpointsServer._(sdk, redisServerUri, storageBucket);
+    await endpointsServer._init();
 
     endpointsServer.server = await shelf.serve(
       endpointsServer.handler,
@@ -103,39 +104,62 @@ class EndpointsServer {
 
   late final HttpServer server;
 
-  late final Pipeline pipeline;
   late final Handler handler;
 
-  late final CommonServerApi commonServerApi;
-  late final CommonServerImpl _commonServerImpl;
+  late final CommonServerApi commonServer;
 
-  EndpointsServer._(String? redisServerUri, Sdk sdk) {
+  EndpointsServer._(Sdk sdk, String? redisServerUri, String storageBucket) {
     // The name of the Cloud Run revision being run, for more detail please see:
     // https://cloud.google.com/run/docs/reference/container-contract#env-vars
     final serverVersion = Platform.environment['K_REVISION'];
 
-    _commonServerImpl = CommonServerImpl(
-      redisServerUri == null
-          ? NoopCache()
-          : RedisCache(redisServerUri, sdk, serverVersion),
+    final cache = redisServerUri == null
+        ? NoopCache()
+        : RedisCache(redisServerUri, sdk, serverVersion);
+
+    commonServer = CommonServerApi(CommonServerImpl(
       sdk,
-    );
-    commonServerApi = CommonServerApi(_commonServerImpl);
+      cache,
+      storageBucket: storageBucket,
+    ));
 
     // Set cache for GitHub OAuth and add GitHub OAuth routes to our router.
-    GitHubOAuthHandler.setCache(
-      redisServerUri == null
-          ? InMemoryCache()
-          : RedisCache(redisServerUri, sdk, serverVersion),
-    );
-    GitHubOAuthHandler.addRoutes(commonServerApi.router);
+    GitHubOAuthHandler.setCache(cache);
+    GitHubOAuthHandler.addRoutes(commonServer.router);
 
-    pipeline = const Pipeline()
+    final pipeline = const Pipeline()
         .addMiddleware(logRequestsToLogger(_logger))
-        .addMiddleware(createCustomCorsHeadersMiddleware());
+        .addMiddleware(createCustomCorsHeadersMiddleware())
+        .addMiddleware(exceptionResponse())
+        .addMiddleware(gzipMiddleware);
 
-    handler = pipeline.addHandler(commonServerApi.router.call);
+    handler = pipeline.addHandler(commonServer.router.call);
   }
 
-  Future<void> init() => _commonServerImpl.init();
+  Future<void> _init() => commonServer.init();
+
+  int get port => server.port;
+
+  Future<void> close() async {
+    await commonServer.shutdown();
+    await server.close();
+  }
+}
+
+Middleware exceptionResponse() {
+  return (Handler handler) {
+    return (Request request) async {
+      try {
+        return await handler(request);
+      } catch (e, st) {
+        if (e is BadRequest) {
+          return Response.badRequest(body: e.message);
+        }
+
+        _logger.severe('${request.requestedUri.path} $e', null, st);
+
+        return Response.badRequest(body: '$e');
+      }
+    };
+  };
 }

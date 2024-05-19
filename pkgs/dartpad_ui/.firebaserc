@@ -1,0 +1,25 @@
+{
+  "projects": {
+    "default": "dart-pad"
+  },
+  "targets": {
+    "fwfh-dev": {
+      "hosting": {
+        "dartpad": [
+          "fwfh-dev"
+        ]
+      }
+    },
+    "dart-pad": {
+      "hosting": {
+        "dartpad": [
+          "dart-pad-a3c64"
+        ],
+        "preview": [
+          "sketch-pad-1cebb"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
